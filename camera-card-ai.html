@@ -4,10 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Sentu 顿 - 灵影相机 v3.0 AI版</title>
-    <script type="module">
-        import imgly from 'https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.4.2/dist/index.esm.js';
-        window.imglyRemoveBackground = imgly;
-    </script>
+    <script src="https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.4.2/dist/index.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/interactjs/dist/interact.min.js"></script>
     <style>
         * {
@@ -959,20 +956,18 @@
 
         // AI背景移除处理
         async function removeBackground(imageBlob) {
-            try {
-                const config = {
-                    publicPath: "https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.4.2/dist/",
-                    debug: false,
-                    proxyToWorker: true,
-                    model: 'isnet-general-use',
-                };
-                
-                const resultBlob = await window.imglyRemoveBackground(imageBlob, config);
-                return resultBlob;
-            } catch (error) {
-                console.error('AI背景移除失败:', error);
-                throw error;
+            const removeFn = window.imglyRemoveBackground;
+            
+            if (typeof removeFn !== 'function') {
+                throw new Error("AI 库加载失败，请检查网络或关闭浏览器跟踪防护。");
             }
+
+            const config = {
+                publicPath: "https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.4.2/dist/",
+                model: 'isnet-general-use',
+            };
+            
+            return await removeFn(imageBlob, config);
         }
 
         // AI/颜色抠图切换
