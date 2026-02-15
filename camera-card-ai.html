@@ -1,0 +1,1904 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Sentu 顿 - 灵影相机 v3.0 AI版</title>
+    <script type="module">
+        import imgly from 'https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.4.2/dist/index.esm.js';
+        window.imglyRemoveBackground = imgly;
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/interactjs/dist/interact.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            overflow: hidden;
+            background: #000;
+        }
+
+        .container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        #video {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+
+        #video.hidden {
+            display: none;
+        }
+
+        #outputCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            z-index: 1;
+            display: none;
+        }
+
+        #outputCanvas.visible {
+            display: block;
+        }
+
+        #outputCanvas.hidden {
+            display: none;
+        }
+
+        .video-fallback {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: none;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .video-fallback.active {
+            display: flex;
+        }
+
+        .video-fallback-text {
+            color: white;
+            font-size: 18px;
+            text-align: center;
+            padding: 20px;
+        }
+
+        #overlay {
+            position: relative;
+            max-width: 80vw;
+            max-height: 80vh;
+            pointer-events: none;
+            display: none;
+        }
+
+        #overlay.visible {
+            display: block;
+        }
+
+        .overlay-wrapper {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: auto;
+            cursor: move;
+            touch-action: none;
+            z-index: 50;
+        }
+
+        .controls {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-radius: 20px 20px 0 0;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            z-index: 100;
+        }
+
+        .slider-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 0 10px;
+        }
+
+        .slider-container label {
+            color: white;
+            font-size: 14px;
+            white-space: nowrap;
+        }
+
+        #scaleSlider {
+            flex: 1;
+            -webkit-appearance: none;
+            height: 6px;
+            border-radius: 3px;
+            background: rgba(255, 255, 255, 0.3);
+            outline: none;
+        }
+
+        #scaleSlider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: white;
+            cursor: pointer;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+        }
+
+        .button-row {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+        }
+
+        button {
+            padding: 14px 24px;
+            border: none;
+            border-radius: 25px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, opacity 0.2s;
+            -webkit-transition: transform 0.2s, opacity 0.2s;
+        }
+
+        #rotateSlider {
+            flex: 1;
+            -webkit-appearance: none;
+            height: 6px;
+            border-radius: 3px;
+            background: rgba(255, 255, 255, 0.3);
+            outline: none;
+        }
+
+        #rotateSlider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: white;
+            cursor: pointer;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+        }
+
+        button:active {
+            transform: scale(0.95);
+            -webkit-transform: scale(0.95);
+        }
+
+        #uploadBtn {
+            background: rgba(255, 255, 255, 0.9);
+            color: #333;
+            flex: 1;
+        }
+
+        #captureBtn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            flex: 1;
+        }
+
+        #resetBtn {
+            background: rgba(255, 107, 107, 0.9);
+            color: white;
+            padding: 14px;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        #fileInput {
+            display: none;
+        }
+
+        .tip {
+            text-align: center;
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 12px;
+            padding: 0 10px;
+        }
+
+        /* 模型加载状态提示 */
+        #loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 200;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: #fff;
+            transition: opacity 0.5s;
+        }
+
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top: 4px solid #fff;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin-bottom: 15px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        #loading-text {
+            font-size: 16px;
+            text-align: center;
+            max-width: 80%;
+            line-height: 1.5;
+        }
+
+        .preset-selector {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            padding: 0 10px;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .preset-card {
+            flex-shrink: 0;
+            width: 70px;
+            height: 70px;
+            border-radius: 12px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            background: rgba(255, 255, 255, 0.1);
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            color: white;
+        }
+
+        .preset-card:hover, .preset-card.active {
+            border-color: #667eea;
+            background: rgba(102, 126, 234, 0.3);
+            transform: scale(1.1);
+        }
+
+        .preset-card-label {
+            font-size: 10px;
+            margin-top: 4px;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        /* 预览弹窗样式 */
+        .preview-modal {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.95);
+            padding: 20px;
+            border-radius: 20px;
+            z-index: 400;
+            display: none;
+            max-width: 90vw;
+            max-height: 90vh;
+            overflow: auto;
+        }
+
+        .preview-modal.active {
+            display: block;
+        }
+
+        .preview-modal h3 {
+            color: white;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+
+        .preview-modal img {
+            max-width: 100%;
+            max-height: 70vh;
+            display: block;
+            margin: 0 auto 20px;
+            border-radius: 10px;
+        }
+
+        .preview-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
+
+        .preview-buttons button {
+            padding: 12px 30px;
+            font-size: 14px;
+        }
+
+        .close-preview {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: none;
+            border: none;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 0;
+        }
+
+        /* AI设置面板 */
+        .ai-settings {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 15px;
+            border-radius: 15px;
+            margin-bottom: 10px;
+        }
+
+        .ai-settings h4 {
+            color: white;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+
+        .setting-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+
+        .setting-row label {
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 13px;
+            min-width: 85px;
+            font-weight: 500;
+        }
+
+        .toggle-btn {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            padding: 10px 18px;
+            border-radius: 18px;
+            font-size: 13px;
+            border: 2px solid rgba(255, 255, 255, 0.4);
+            cursor: pointer;
+            transition: all 0.2s;
+            -webkit-transition: all 0.2s;
+        }
+
+        .toggle-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: scale(1.02);
+            -webkit-transform: scale(1.02);
+        }
+
+        .toggle-btn:active {
+            transform: scale(0.98);
+            -webkit-transform: scale(0.98);
+        }
+
+        .toggle-btn.active {
+            background: rgba(102, 126, 234, 0.9);
+            border-color: #667eea;
+            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.4);
+            -webkit-box-shadow: 0 2px 8px rgba(102, 126, 234, 0.4);
+        }
+
+        /* 颜色抠图弹窗 */
+        .color-remover-modal {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.95);
+            padding: 20px;
+            border-radius: 20px;
+            z-index: 300;
+            display: none;
+            max-width: 90vw;
+            max-height: 90vh;
+            overflow: auto;
+        }
+
+        .color-remover-modal.active {
+            display: block;
+        }
+
+        .color-remover-modal h3 {
+            color: white;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+
+        .color-preview-container {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin: 20px 0;
+            flex-wrap: wrap;
+        }
+
+        .color-preview-box {
+            text-align: center;
+        }
+
+        .color-preview-box canvas {
+            max-width: 150px;
+            max-height: 150px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 8px;
+        }
+
+        .color-preview-box p {
+            color: white;
+            font-size: 12px;
+            margin-top: 8px;
+        }
+
+        .color-remover-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-top: 20px;
+        }
+
+        .close-color-remover {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: none;
+            border: none;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 0;
+        }
+
+        /* AI抠图预览弹窗 */
+        .ai-remover-modal {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.95);
+            padding: 20px;
+            border-radius: 20px;
+            z-index: 300;
+            display: none;
+            max-width: 90vw;
+            max-height: 90vh;
+            overflow: auto;
+        }
+
+        .ai-remover-modal.active {
+            display: block;
+        }
+
+        .ai-remover-modal h3 {
+            color: white;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+
+        .ai-preview-container {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin: 20px 0;
+            flex-wrap: wrap;
+        }
+
+        .ai-preview-box {
+            text-align: center;
+        }
+
+        .ai-preview-box canvas {
+            max-width: 150px;
+            max-height: 150px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 8px;
+            background: repeating-conic-gradient(#333 0% 25%, #444 0% 50%) 50% / 10px 10px;
+        }
+
+        .ai-preview-box p {
+            color: white;
+            font-size: 12px;
+            margin-top: 8px;
+        }
+
+        .ai-remover-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-top: 20px;
+        }
+
+        .close-ai-remover {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: none;
+            border: none;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 0;
+        }
+
+        /* 模型加载提示 */
+        .model-loading {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 229, 255, 0.2);
+            border: 1px solid #00e5ff;
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 14px;
+            color: #00e5ff;
+            z-index: 60;
+            display: none;
+        }
+
+        .model-loading.visible {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div id="loading-overlay">
+        <div class="spinner"></div>
+        <div id="loading-text">正在初始化 AI 模型...</div>
+    </div>
+
+    <div class="model-loading" id="model-loading">
+        正在加载 AI 模型...
+    </div>
+
+    <div class="container">
+        <video id="video" autoplay playsinline muted></video>
+        <canvas id="outputCanvas"></canvas>
+        <div class="video-fallback" id="videoFallback">
+            <div class="video-fallback-text">
+                <p>相机不可用</p>
+                <p style="font-size: 14px; margin-top: 10px;">使用渐变背景作为预览</p>
+            </div>
+        </div>
+        <div class="overlay-wrapper" id="overlayWrapper">
+            <img id="overlay" src="" alt="">
+        </div>
+    </div>
+
+    <div class="controls">
+        <!-- AI设置 -->
+        <div class="ai-settings">
+            <h4>🤖 AI 背景移除设置</h4>
+            <div class="setting-row">
+                <button id="toggleAI" class="toggle-btn active">AI抠图: 开启</button>
+                <button id="toggleColor" class="toggle-btn">颜色抠图</button>
+            </div>
+        </div>
+
+        <div class="slider-container">
+            <label>缩放:</label>
+            <input type="range" id="scaleSlider" min="20" max="200" value="100">
+            <label id="scaleValue">100%</label>
+        </div>
+        
+        <div class="preset-selector">
+            <div class="preset-card" data-preset="polaroid">
+                <div>📷</div>
+                <div class="preset-card-label">拍立得</div>
+            </div>
+            <div class="preset-card" data-preset="vintage">
+                <div>🎞️</div>
+                <div class="preset-card-label">复古</div>
+            </div>
+            <div class="preset-card" data-preset="film">
+                <div>🎬</div>
+                <div class="preset-card-label">胶卷</div>
+            </div>
+            <div class="preset-card" data-preset="custom">
+                <div>➕</div>
+                <div class="preset-card-label">自定义</div>
+            </div>
+        </div>
+        
+        <div class="tip">拖拽调整位置 · 双指缩放或滑动条调整大小</div>
+
+        <div class="slider-container">
+            <label>旋转:</label>
+            <button id="rotateLeftBtn" style="padding: 8px 12px; font-size: 14px;">↺</button>
+            <input type="range" id="rotateSlider" min="-180" max="180" value="0" style="flex: 1;">
+            <button id="rotateRightBtn" style="padding: 8px 12px; font-size: 14px;">↻</button>
+            <label id="rotateValue">0°</label>
+        </div>
+
+        <div class="button-row">
+            <button id="uploadBtn">📷 上传透卡</button>
+            <button id="captureBtn">📸 拍照保存</button>
+            <button id="resetBtn">↻</button>
+        </div>
+    </div>
+
+    <input type="file" id="fileInput" accept="image/png,image/*">
+    <canvas id="canvas" class="hidden"></canvas>
+
+    <!-- 颜色抠图弹窗 -->
+    <div class="color-remover-modal" id="colorRemoverModal">
+        <button class="close-color-remover" id="closeColorRemover">×</button>
+        <h3>🎨 颜色抠图</h3>
+        
+        <div class="color-preview-container">
+            <div class="color-preview-box">
+                <canvas id="colorOriginalPreview"></canvas>
+                <p>原始图片</p>
+            </div>
+            <div class="color-preview-box">
+                <canvas id="colorProcessedPreview"></canvas>
+                <p>预览效果</p>
+            </div>
+        </div>
+
+        <div style="margin: 20px 0;">
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+                <label style="color: white; font-size: 14px;">背景色:</label>
+                <input type="color" id="colorBgColorPicker" value="#ffffff" style="width: 50px; height: 50px; border: none; border-radius: 8px; cursor: pointer;">
+                <button id="colorAutoDetectBtn" style="background: rgba(102, 126, 234, 0.9); color: white; padding: 8px 16px; font-size: 12px;">🔍 自动检测</button>
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+                <label style="color: white; font-size: 14px;">容差:</label>
+                <input type="range" id="colorToleranceSlider" min="0" max="100" value="30" style="flex: 1;">
+                <span style="color: white; font-size: 12px;" id="colorToleranceValue">30</span>
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <label style="color: white; font-size: 14px;">羽化:</label>
+                <input type="range" id="colorFeatherSlider" min="0" max="20" value="3" style="flex: 1;">
+                <span style="color: white; font-size: 12px;" id="colorFeatherValue">3</span>
+            </div>
+        </div>
+
+        <div class="color-remover-buttons">
+            <button id="applyColorRemover" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 12px 30px; font-size: 14px;">应用</button>
+            <button id="skipColorRemover" style="background: rgba(255, 255, 255, 0.3); color: white; padding: 12px 30px; font-size: 14px;">跳过</button>
+        </div>
+    </div>
+
+    <!-- AI抠图预览弹窗 -->
+    <div class="ai-remover-modal" id="aiRemoverModal">
+        <button class="close-ai-remover" id="closeAIRemover">×</button>
+        <h3>🤖 AI 抠图预览</h3>
+        
+        <div class="ai-preview-container">
+            <div class="ai-preview-box">
+                <canvas id="aiOriginalPreview"></canvas>
+                <p>原始图片</p>
+            </div>
+            <div class="ai-preview-box">
+                <canvas id="aiProcessedPreview"></canvas>
+                <p>AI抠图效果</p>
+            </div>
+        </div>
+
+        <div class="setting-row" style="margin-top: 15px;">
+            <p style="color: rgba(255,255,255,0.7); font-size: 12px; text-align: center; width: 100%;">
+                💡 使用 imgly 的高精度 AI 背景移除技术
+            </p>
+        </div>
+
+        <div class="ai-remover-buttons">
+            <button id="applyAIRemover" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 12px 30px; font-size: 14px;">应用</button>
+            <button id="skipAIRemover" style="background: rgba(255, 255, 255, 0.3); color: white; padding: 12px 30px; font-size: 14px;">使用原图</button>
+        </div>
+    </div>
+
+    <!-- 预览弹窗 -->
+    <div class="preview-modal" id="previewModal">
+        <button class="close-preview" id="closePreview">×</button>
+        <h3>📸 照片预览</h3>
+        <img id="previewImage" src="" alt="预览图片">
+        <div class="preview-buttons">
+            <button id="saveBtn" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">💾 保存照片</button>
+            <button id="retakeBtn" style="background: rgba(255, 107, 107, 0.9); color: white;">🔄 重拍</button>
+        </div>
+    </div>
+
+    <script>
+        // DOM 元素
+        const video = document.getElementById('video');
+        const outputCanvas = document.getElementById('outputCanvas');
+        const overlay = document.getElementById('overlay');
+        const overlayWrapper = document.getElementById('overlayWrapper');
+        const uploadBtn = document.getElementById('uploadBtn');
+        const captureBtn = document.getElementById('captureBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const fileInput = document.getElementById('fileInput');
+        const canvas = document.getElementById('canvas');
+        const scaleSlider = document.getElementById('scaleSlider');
+        const scaleValue = document.getElementById('scaleValue');
+        const rotateSlider = document.getElementById('rotateSlider');
+        const rotateValue = document.getElementById('rotateValue');
+        const rotateLeftBtn = document.getElementById('rotateLeftBtn');
+        const rotateRightBtn = document.getElementById('rotateRightBtn');
+        const presetCards = document.querySelectorAll('.preset-card');
+        const loadingOverlay = document.getElementById('loading-overlay');
+        const loadingText = document.getElementById('loading-text');
+        const modelLoading = document.getElementById('model-loading');
+
+        // AI设置
+        const toggleAI = document.getElementById('toggleAI');
+        const toggleColor = document.getElementById('toggleColor');
+
+        // 颜色抠图元素
+        const colorRemoverModal = document.getElementById('colorRemoverModal');
+        const closeColorRemover = document.getElementById('closeColorRemover');
+        const colorOriginalPreview = document.getElementById('colorOriginalPreview');
+        const colorProcessedPreview = document.getElementById('colorProcessedPreview');
+        const colorBgColorPicker = document.getElementById('colorBgColorPicker');
+        const colorToleranceSlider = document.getElementById('colorToleranceSlider');
+        const colorToleranceValue = document.getElementById('colorToleranceValue');
+        const colorFeatherSlider = document.getElementById('colorFeatherSlider');
+        const colorFeatherValue = document.getElementById('colorFeatherValue');
+        const applyColorRemover = document.getElementById('applyColorRemover');
+        const skipColorRemover = document.getElementById('skipColorRemover');
+        const colorAutoDetectBtn = document.getElementById('colorAutoDetectBtn');
+
+        // AI抠图元素
+        const aiRemoverModal = document.getElementById('aiRemoverModal');
+        const closeAIRemover = document.getElementById('closeAIRemover');
+        const aiOriginalPreview = document.getElementById('aiOriginalPreview');
+        const aiProcessedPreview = document.getElementById('aiProcessedPreview');
+        const applyAIRemover = document.getElementById('applyAIRemover');
+        const skipAIRemover = document.getElementById('skipAIRemover');
+
+        // 预览弹窗元素
+        const previewModal = document.getElementById('previewModal');
+        const previewImage = document.getElementById('previewImage');
+        const saveBtn = document.getElementById('saveBtn');
+        const retakeBtn = document.getElementById('retakeBtn');
+        const closePreview = document.getElementById('closePreview');
+
+        // 全局变量
+        let isAIEnabled = true;
+        let isProcessing = false;
+        let uploadedImage = null;
+        let uploadedImageData = null;
+        let currentPreset = null;
+        let overlayLoaded = false;
+        let scale = 1;
+        let rotation = 0;
+        let baseWidth = 0;
+        let baseHeight = 0;
+        let isDragging = false;
+        let startX, startY, initialX, initialY;
+        let capturedImageData = null;
+        let isModelLoaded = false;
+        let processedVideoBlob = null;
+
+        // 预设透卡
+        const presets = {
+            polaroid: generatePolaroidCard(),
+            vintage: generateVintageCard(),
+            film: generateFilmCard()
+        };
+
+        // 生成拍立得风格边框
+        function generatePolaroidCard() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 300;
+            canvas.height = 380;
+            const ctx = canvas.getContext('2d');
+
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, 300, 15);
+            ctx.fillRect(0, 285, 300, 95);
+            ctx.fillRect(0, 0, 15, 380);
+            ctx.fillRect(285, 0, 15, 380);
+
+            ctx.strokeStyle = '#e0e0e0';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(15, 15, 270, 270);
+
+            ctx.fillStyle = '#333';
+            ctx.font = '12px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('❤️ INSTAX', 150, 345);
+
+            return canvas.toDataURL('image/png');
+        }
+
+        // 生成复古边框
+        function generateVintageCard() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 320;
+            canvas.height = 400;
+            const ctx = canvas.getContext('2d');
+
+            ctx.strokeStyle = '#c9a66b';
+            ctx.lineWidth = 15;
+            ctx.strokeRect(10, 10, 300, 380);
+
+            ctx.strokeStyle = '#8b7355';
+            ctx.lineWidth = 3;
+            ctx.strokeRect(28, 28, 264, 344);
+
+            const corners = [[10, 10], [310, 10], [310, 390], [10, 390]];
+            ctx.fillStyle = '#c9a66b';
+            corners.forEach(([x, y]) => {
+                ctx.beginPath();
+                ctx.arc(x, y, 12, 0, Math.PI * 2);
+                ctx.fill();
+            });
+
+            ctx.strokeStyle = '#8b7355';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([5, 5]);
+            ctx.strokeRect(50, 50, 220, 300);
+            ctx.setLineDash([]);
+
+            return canvas.toDataURL('image/png');
+        }
+
+        // 生成胶卷风格边框
+        function generateFilmCard() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 340;
+            canvas.height = 480;
+            const ctx = canvas.getContext('2d');
+
+            ctx.fillStyle = '#1a1a1a';
+            ctx.fillRect(0, 0, 20, 480);
+            ctx.fillRect(320, 0, 20, 480);
+            ctx.fillRect(0, 0, 340, 15);
+            ctx.fillRect(0, 465, 340, 15);
+
+            ctx.fillStyle = '#333';
+            for (let y = 30; y < 480; y += 40) {
+                ctx.fillRect(8, y, 12, 20);
+                ctx.fillRect(320, y, 12, 20);
+            }
+
+            ctx.strokeStyle = '#666';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(20, 15, 300, 450);
+
+            ctx.fillStyle = '#667eea';
+            ctx.beginPath();
+            ctx.arc(170, 240, 5, 0, Math.PI * 2);
+            ctx.fill();
+
+            return canvas.toDataURL('image/png');
+        }
+
+        // 初始化相机
+        async function initCamera() {
+            try {
+                console.log('正在请求相机权限...');
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: 'environment',
+                        width: { ideal: 1920 },
+                        height: { ideal: 1080 }
+                    }
+                });
+                
+                video.srcObject = stream;
+
+                const waitForVideoReady = () => {
+                    return new Promise((resolve, reject) => {
+                        if (video.readyState >= 2) {
+                            resolve();
+                            return;
+                        }
+                        video.onloadedmetadata = () => {
+                            console.log('视频元数据加载完成');
+                            resolve();
+                        };
+                        video.onerror = reject;
+                    });
+                };
+
+                await waitForVideoReady();
+                await video.play();
+                console.log('视频开始播放');
+
+                // 隐藏加载遮罩
+                loadingOverlay.style.opacity = '0';
+                setTimeout(() => {
+                    loadingOverlay.style.display = 'none';
+                }, 500);
+
+            } catch (err) {
+                console.error('Camera error:', err);
+                document.getElementById('videoFallback').classList.add('active');
+                loadingOverlay.style.display = 'none';
+            }
+        }
+
+        // AI背景移除处理
+        async function removeBackground(imageBlob) {
+            try {
+                const config = {
+                    publicPath: "https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.4.2/dist/",
+                    debug: false,
+                    proxyToWorker: true,
+                    model: 'isnet-general-use',
+                };
+                
+                const resultBlob = await window.imglyRemoveBackground(imageBlob, config);
+                return resultBlob;
+            } catch (error) {
+                console.error('AI背景移除失败:', error);
+                throw error;
+            }
+        }
+
+        // AI/颜色抠图切换
+        toggleAI.addEventListener('click', () => {
+            isAIEnabled = true;
+            updateToggleButtons();
+            
+            if (isAIEnabled) {
+                outputCanvas.classList.remove('hidden');
+                outputCanvas.classList.add('visible');
+                video.classList.add('hidden');
+                console.log('切换到 imgly AI 抠图模式');
+            }
+        });
+
+        toggleColor.addEventListener('click', () => {
+            isAIEnabled = false;
+            updateToggleButtons();
+            
+            if (!isAIEnabled) {
+                outputCanvas.classList.add('hidden');
+                outputCanvas.classList.remove('visible');
+                video.classList.remove('hidden');
+                console.log('切换到颜色抠图模式');
+            }
+        });
+
+        function updateToggleButtons() {
+            toggleAI.classList.toggle('active', isAIEnabled);
+            toggleColor.classList.toggle('active', !isAIEnabled);
+            toggleAI.textContent = isAIEnabled ? 'AI抠图: 开启' : 'AI抠图';
+            toggleColor.textContent = !isAIEnabled ? '颜色抠图: 开启' : '颜色抠图';
+        }
+
+        // 选择预设透卡
+        presetCards.forEach(card => {
+            card.addEventListener('click', () => {
+                const preset = card.dataset.preset;
+                
+                presetCards.forEach(c => c.classList.remove('active'));
+                
+                if (preset === 'custom') {
+                    fileInput.click();
+                    return;
+                }
+                
+                card.classList.add('active');
+                currentPreset = preset;
+                
+                overlay.src = presets[preset];
+                overlay.onload = () => {
+                    overlay.classList.add('visible');
+                    overlayLoaded = true;
+                    baseWidth = overlay.naturalWidth;
+                    baseHeight = overlay.naturalHeight;
+                    scale = 1;
+                    rotation = 0;
+                    scaleSlider.value = 100;
+                    scaleValue.textContent = '100%';
+                    rotateSlider.value = 0;
+                    rotateValue.textContent = '0°';
+                    updateOverlaySize();
+                    resetPosition();
+                };
+            });
+        });
+
+        // 上传透卡
+        uploadBtn.addEventListener('click', () => {
+            fileInput.click();
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    uploadedImageData = event.target.result;
+                    uploadedImage = new Image();
+                    uploadedImage.onload = () => {
+                        presetCards.forEach(c => c.classList.remove('active'));
+                        
+                        if (isAIEnabled) {
+                            showAIRemover();
+                        } else {
+                            showColorRemover();
+                        }
+                    };
+                    uploadedImage.src = uploadedImageData;
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        // 显示 AI 抠图预览弹窗
+        function showAIRemover() {
+            aiRemoverModal.classList.add('active');
+
+            const maxSize = 300;
+            const scale = Math.min(maxSize / uploadedImage.width, maxSize / uploadedImage.height);
+            const width = uploadedImage.width * scale;
+            const height = uploadedImage.height * scale;
+
+            aiOriginalPreview.width = width;
+            aiOriginalPreview.height = height;
+            aiProcessedPreview.width = width;
+            aiProcessedPreview.height = height;
+
+            // 绘制原图
+            const origCtx = aiOriginalPreview.getContext('2d');
+            origCtx.drawImage(uploadedImage, 0, 0, width, height);
+
+            // 处理 AI 抠图
+            processAIRemover();
+        }
+
+        // 处理 AI 抠图
+        async function processAIRemover() {
+            if (!uploadedImage) return;
+
+            const width = aiProcessedPreview.width;
+            const height = aiProcessedPreview.height;
+
+            // 将图片转为 Blob
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = uploadedImage.width;
+            tempCanvas.height = uploadedImage.height;
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCtx.drawImage(uploadedImage, 0, 0);
+
+            tempCanvas.toBlob(async (blob) => {
+                try {
+                    modelLoading.classList.add('visible');
+                    
+                    const resultBlob = await removeBackground(blob);
+                    modelLoading.classList.remove('visible');
+
+                    // 显示结果
+                    const previewCtx = aiProcessedPreview.getContext('2d');
+                    const resultImage = new Image();
+                    resultImage.onload = () => {
+                        previewCtx.clearRect(0, 0, width, height);
+                        previewCtx.drawImage(resultImage, 0, 0, width, height);
+                    };
+                    resultImage.src = URL.createObjectURL(resultBlob);
+                } catch (error) {
+                    console.error('AI处理失败:', error);
+                    modelLoading.classList.remove('visible');
+                    alert('AI处理失败，请重试或切换到颜色抠图模式');
+                    
+                    // 显示原图
+                    const previewCtx = aiProcessedPreview.getContext('2d');
+                    previewCtx.drawImage(uploadedImage, 0, 0, width, height);
+                }
+            }, 'image/png');
+        }
+
+        // AI抠图弹窗事件
+        applyAIRemover.addEventListener('click', () => {
+            loadingOverlay.style.display = 'flex';
+            loadingOverlay.style.opacity = '1';
+            loadingText.textContent = '正在 AI 抠图中...';
+
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = uploadedImage.width;
+            tempCanvas.height = uploadedImage.height;
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCtx.drawImage(uploadedImage, 0, 0);
+
+            tempCanvas.toBlob(async (blob) => {
+                try {
+                    const resultBlob = await removeBackground(blob);
+                    const url = URL.createObjectURL(resultBlob);
+                    
+                    overlay.src = url;
+                    overlay.onload = () => {
+                        overlay.classList.add('visible');
+                        overlayLoaded = true;
+                        baseWidth = overlay.naturalWidth;
+                        baseHeight = overlay.naturalHeight;
+                        scale = 1;
+                        rotation = 0;
+                        scaleSlider.value = 100;
+                        scaleValue.textContent = '100%';
+                        rotateSlider.value = 0;
+                        rotateValue.textContent = '0°';
+                        updateOverlaySize();
+                        resetPosition();
+                        
+                        loadingOverlay.style.opacity = '0';
+                        setTimeout(() => {
+                            loadingOverlay.style.display = 'none';
+                        }, 500);
+                    };
+
+                    aiRemoverModal.classList.remove('active');
+                } catch (error) {
+                    console.error('AI 处理失败:', error);
+                    loadingOverlay.style.display = 'none';
+                    alert('AI 处理失败，已使用原图');
+                    
+                    overlay.src = uploadedImageData;
+                    overlay.onload = () => {
+                        overlay.classList.add('visible');
+                        overlayLoaded = true;
+                        baseWidth = overlay.naturalWidth;
+                        baseHeight = overlay.naturalHeight;
+                        scale = 1;
+                        rotation = 0;
+                        scaleSlider.value = 100;
+                        scaleValue.textContent = '100%';
+                        rotateSlider.value = 0;
+                        rotateValue.textContent = '0°';
+                        updateOverlaySize();
+                        resetPosition();
+                    };
+                    aiRemoverModal.classList.remove('active');
+                }
+            }, 'image/png');
+        });
+
+        skipAIRemover.addEventListener('click', () => {
+            overlay.src = uploadedImageData;
+            overlay.onload = () => {
+                overlay.classList.add('visible');
+                overlayLoaded = true;
+                baseWidth = overlay.naturalWidth;
+                baseHeight = overlay.naturalHeight;
+                scale = 1;
+                rotation = 0;
+                scaleSlider.value = 100;
+                scaleValue.textContent = '100%';
+                rotateSlider.value = 0;
+                rotateValue.textContent = '0°';
+                updateOverlaySize();
+                resetPosition();
+            };
+            aiRemoverModal.classList.remove('active');
+        });
+
+        closeAIRemover.addEventListener('click', () => {
+            aiRemoverModal.classList.remove('active');
+        });
+
+        // 显示颜色抠图弹窗
+        function showColorRemover() {
+            colorRemoverModal.classList.add('active');
+
+            const maxSize = 300;
+            const scale = Math.min(maxSize / uploadedImage.width, maxSize / uploadedImage.height);
+            const width = uploadedImage.width * scale;
+            const height = uploadedImage.height * scale;
+
+            colorOriginalPreview.width = width;
+            colorOriginalPreview.height = height;
+            colorProcessedPreview.width = width;
+            colorProcessedPreview.height = height;
+
+            const origCtx = colorOriginalPreview.getContext('2d');
+            origCtx.drawImage(uploadedImage, 0, 0, width, height);
+
+            autoDetectBackgroundColor();
+            processColorRemover();
+        }
+
+        // 自动检测背景色
+        function autoDetectBackgroundColor() {
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = uploadedImage.width;
+            tempCanvas.height = uploadedImage.height;
+            const ctx = tempCanvas.getContext('2d');
+            ctx.drawImage(uploadedImage, 0, 0);
+
+            const samplePoints = [
+                [0, 0],
+                [uploadedImage.width - 1, 0],
+                [0, uploadedImage.height - 1],
+                [uploadedImage.width - 1, uploadedImage.height - 1],
+                [uploadedImage.width / 2, 0],
+                [uploadedImage.width / 2, uploadedImage.height - 1]
+            ];
+
+            let totalR = 0, totalG = 0, totalB = 0;
+            samplePoints.forEach(([x, y]) => {
+                const pixel = ctx.getImageData(Math.floor(x), Math.floor(y), 1, 1).data;
+                totalR += pixel[0];
+                totalG += pixel[1];
+                totalB += pixel[2];
+            });
+
+            const avgR = Math.round(totalR / samplePoints.length);
+            const avgG = Math.round(totalG / samplePoints.length);
+            const avgB = Math.round(totalB / samplePoints.length);
+            const hex = '#' + [avgR, avgG, avgB].map(x => x.toString(16).padStart(2, '0')).join('');
+            colorBgColorPicker.value = hex;
+        }
+
+        // 处理颜色抠图
+        function processColorRemover() {
+            const ctx = colorProcessedPreview.getContext('2d');
+            ctx.drawImage(uploadedImage, 0, 0, colorProcessedPreview.width, colorProcessedPreview.height);
+
+            const imageData = ctx.getImageData(0, 0, colorProcessedPreview.width, colorProcessedPreview.height);
+            const data = imageData.data;
+            const bgColor = hexToRgb(colorBgColorPicker.value);
+            const tolerance = parseInt(colorToleranceSlider.value);
+            const feather = parseInt(colorFeatherSlider.value);
+
+            const alphaMap = new Uint8Array(data.length / 4);
+
+            for (let i = 0; i < data.length; i += 4) {
+                const idx = i / 4;
+                const r = data[i];
+                const g = data[i + 1];
+                const b = data[i + 2];
+
+                const distance = Math.sqrt(
+                    Math.pow(r - bgColor.r, 2) * 0.3 +
+                    Math.pow(g - bgColor.g, 2) * 0.59 +
+                    Math.pow(b - bgColor.b, 2) * 0.11
+                );
+
+                const maxDistance = 255;
+                const normalizedDistance = distance / maxDistance;
+
+                if (normalizedDistance < tolerance / 100) {
+                    alphaMap[idx] = 0;
+                } else if (normalizedDistance < (tolerance + 20) / 100) {
+                    alphaMap[idx] = Math.round(255 * (normalizedDistance - tolerance / 100) / (20 / 100));
+                } else {
+                    alphaMap[idx] = 255;
+                }
+            }
+
+            if (feather > 0) {
+                const blurredAlpha = gaussianBlur(alphaMap, colorProcessedPreview.width, colorProcessedPreview.height, feather);
+                for (let i = 0; i < data.length; i += 4) {
+                    data[i + 3] = blurredAlpha[i / 4];
+                }
+            } else {
+                for (let i = 0; i < data.length; i += 4) {
+                    data[i + 3] = alphaMap[i / 4];
+                }
+            }
+
+            ctx.putImageData(imageData, 0, 0);
+        }
+
+        // 高斯模糊
+        function gaussianBlur(data, width, height, radius) {
+            const result = new Uint8Array(data.length);
+            const size = radius * 2 + 1;
+            const kernel = [];
+
+            let sum = 0;
+            for (let i = 0; i < size; i++) {
+                const x = i - radius;
+                const value = Math.exp(-(x * x) / (2 * radius * radius));
+                kernel.push(value);
+                sum += value;
+            }
+            for (let i = 0; i < size; i++) {
+                kernel[i] /= sum;
+            }
+
+            const temp = new Uint8Array(data.length);
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                    let sum = 0;
+                    let weightSum = 0;
+                    for (let i = 0; i < size; i++) {
+                        const nx = x + i - radius;
+                        if (nx >= 0 && nx < width) {
+                            sum += data[y * width + nx] * kernel[i];
+                            weightSum += kernel[i];
+                        }
+                    }
+                    temp[y * width + x] = weightSum > 0 ? Math.round(sum / weightSum) : data[y * width + x];
+                }
+            }
+
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                    let sum = 0;
+                    let weightSum = 0;
+                    for (let i = 0; i < size; i++) {
+                        const ny = y + i - radius;
+                        if (ny >= 0 && ny < height) {
+                            sum += temp[ny * width + x] * kernel[i];
+                            weightSum += kernel[i];
+                        }
+                    }
+                    result[y * width + x] = weightSum > 0 ? Math.round(sum / weightSum) : temp[y * width + x];
+                }
+            }
+
+            return result;
+        }
+
+        // 十六进制转 RGB
+        function hexToRgb(hex) {
+            const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+            return result ? {
+                r: parseInt(result[1], 16),
+                g: parseInt(result[2], 16),
+                b: parseInt(result[3], 16)
+            } : null;
+        }
+
+        // 颜色抠图事件监听
+        colorToleranceSlider.addEventListener('input', (e) => {
+            colorToleranceValue.textContent = e.target.value;
+            processColorRemover();
+        });
+
+        colorFeatherSlider.addEventListener('input', (e) => {
+            colorFeatherValue.textContent = e.target.value;
+            processColorRemover();
+        });
+
+        colorBgColorPicker.addEventListener('input', () => {
+            processColorRemover();
+        });
+
+        colorAutoDetectBtn.addEventListener('click', () => {
+            autoDetectBackgroundColor();
+            processColorRemover();
+        });
+
+        applyColorRemover.addEventListener('click', () => {
+            applyColorRemoval();
+        });
+
+        skipColorRemover.addEventListener('click', () => {
+            overlay.src = uploadedImageData;
+            overlay.onload = () => {
+                overlay.classList.add('visible');
+                overlayLoaded = true;
+                baseWidth = overlay.naturalWidth;
+                baseHeight = overlay.naturalHeight;
+                scale = 1;
+                rotation = 0;
+                scaleSlider.value = 100;
+                scaleValue.textContent = '100%';
+                rotateSlider.value = 0;
+                rotateValue.textContent = '0°';
+                updateOverlaySize();
+                resetPosition();
+            };
+            colorRemoverModal.classList.remove('active');
+        });
+
+        closeColorRemover.addEventListener('click', () => {
+            colorRemoverModal.classList.remove('active');
+        });
+
+        function applyColorRemoval() {
+            const finalCanvas = document.createElement('canvas');
+            finalCanvas.width = uploadedImage.width;
+            finalCanvas.height = uploadedImage.height;
+            const finalCtx = finalCanvas.getContext('2d');
+            finalCtx.drawImage(uploadedImage, 0, 0);
+
+            const imageData = finalCtx.getImageData(0, 0, finalCanvas.width, finalCanvas.height);
+            const data = imageData.data;
+            const bgColor = hexToRgb(colorBgColorPicker.value);
+            const tolerance = colorToleranceSlider.value / 100;
+            const feather = parseInt(colorFeatherSlider.value);
+
+            const alphaMap = new Uint8Array(data.length / 4);
+
+            for (let i = 0; i < data.length; i += 4) {
+                const idx = i / 4;
+                const r = data[i];
+                const g = data[i + 1];
+                const b = data[i + 2];
+
+                const distance = Math.sqrt(
+                    Math.pow(r - bgColor.r, 2) +
+                    Math.pow(g - bgColor.g, 2) +
+                    Math.pow(b - bgColor.b, 2)
+                );
+
+                const maxDistance = Math.sqrt(255 * 255 + 255 * 255 + 255 * 255);
+                const similarity = distance / maxDistance;
+
+                if (similarity < tolerance) {
+                    alphaMap[idx] = 0;
+                } else if (similarity < tolerance + 0.2) {
+                    alphaMap[idx] = Math.round(255 * (similarity - tolerance) / 0.2);
+                } else {
+                    alphaMap[idx] = 255;
+                }
+            }
+
+            if (feather > 0) {
+                const blurredAlpha = alphaMap.slice();
+                for (let i = 0; i < alphaMap.length; i++) {
+                    const x = i % finalCanvas.width;
+                    const y = Math.floor(i / finalCanvas.width);
+
+                    let sum = 0;
+                    let count = 0;
+
+                    for (let dy = -feather; dy <= feather; dy++) {
+                        for (let dx = -feather; dx <= feather; dx++) {
+                            const nx = x + dx;
+                            const ny = y + dy;
+
+                            if (nx >= 0 && nx < finalCanvas.width &&
+                                ny >= 0 && ny < finalCanvas.height) {
+                                const ni = ny * finalCanvas.width + nx;
+                                sum += alphaMap[ni];
+                                count++;
+                            }
+                        }
+                    }
+
+                    blurredAlpha[i] = Math.round(sum / count);
+                }
+
+                for (let i = 0; i < data.length; i += 4) {
+                    data[i + 3] = blurredAlpha[i / 4];
+                }
+            } else {
+                for (let i = 0; i < data.length; i += 4) {
+                    data[i + 3] = alphaMap[i / 4];
+                }
+            }
+
+            finalCtx.putImageData(imageData, 0, 0);
+
+            overlay.src = finalCanvas.toDataURL('image/png');
+            overlay.onload = () => {
+                overlay.classList.add('visible');
+                overlayLoaded = true;
+                baseWidth = overlay.naturalWidth;
+                baseHeight = overlay.naturalHeight;
+                scale = 1;
+                rotation = 0;
+                scaleSlider.value = 100;
+                scaleValue.textContent = '100%';
+                rotateSlider.value = 0;
+                rotateValue.textContent = '0°';
+                updateOverlaySize();
+                resetPosition();
+            };
+
+            colorRemoverModal.classList.remove('active');
+        }
+
+        // 旋转控制
+        rotateSlider.addEventListener('input', (e) => {
+            rotation = parseInt(e.target.value);
+            rotateValue.textContent = rotation + '°';
+            updateOverlayTransform();
+        });
+
+        rotateLeftBtn.addEventListener('click', () => {
+            rotation = Math.max(-180, rotation - 15);
+            rotateSlider.value = rotation;
+            rotateValue.textContent = rotation + '°';
+            updateOverlayTransform();
+        });
+
+        rotateRightBtn.addEventListener('click', () => {
+            rotation = Math.min(180, rotation + 15);
+            rotateSlider.value = rotation;
+            rotateValue.textContent = rotation + '°';
+            updateOverlayTransform();
+        });
+
+        // 更新透卡变换
+        function updateOverlayTransform() {
+            if (overlayLoaded) {
+                overlayWrapper.style.transform = `translate(-50%, -50%) rotate(${rotation}deg)`;
+            }
+        }
+
+        // 更新透卡大小
+        function updateOverlaySize() {
+            const containerWidth = window.innerWidth * 0.8;
+            const containerHeight = window.innerHeight * 0.8;
+            
+            const aspectRatio = baseWidth / baseHeight;
+            let newWidth, newHeight;
+            
+            if (aspectRatio > containerWidth / containerHeight) {
+                newWidth = containerWidth;
+                newHeight = containerWidth / aspectRatio;
+            } else {
+                newHeight = containerHeight;
+                newWidth = containerHeight * aspectRatio;
+            }
+            
+            overlay.style.width = (newWidth * scale) + 'px';
+            overlay.style.height = (newHeight * scale) + 'px';
+        }
+
+        // 滑动条控制缩放
+        scaleSlider.addEventListener('input', (e) => {
+            scale = e.target.value / 100;
+            scaleValue.textContent = e.target.value + '%';
+            if (overlayLoaded) {
+                updateOverlaySize();
+            }
+        });
+
+        // 重置位置
+        function resetPosition() {
+            overlayWrapper.style.left = '50%';
+            overlayWrapper.style.top = '50%';
+            overlayWrapper.style.transform = 'translate(-50%, -50%) rotate(0deg)';
+        }
+
+        resetBtn.addEventListener('click', () => {
+            if (overlayLoaded) {
+                scale = 1;
+                rotation = 0;
+                scaleSlider.value = 100;
+                scaleValue.textContent = '100%';
+                rotateSlider.value = 0;
+                rotateValue.textContent = '0°';
+                updateOverlaySize();
+                resetPosition();
+            }
+        });
+
+        // 拖拽功能
+        overlayWrapper.addEventListener('mousedown', startDrag);
+        overlayWrapper.addEventListener('touchstart', startDrag, { passive: false });
+
+        function startDrag(e) {
+            if (!overlayLoaded) return;
+            e.preventDefault();
+            isDragging = true;
+            
+            const point = e.touches ? e.touches[0] : e;
+            startX = point.clientX;
+            startY = point.clientY;
+            
+            const rect = overlayWrapper.getBoundingClientRect();
+            initialX = rect.left + rect.width / 2;
+            initialY = rect.top + rect.height / 2;
+            
+            document.addEventListener('mousemove', drag);
+            document.addEventListener('touchmove', drag, { passive: false });
+            document.addEventListener('mouseup', stopDrag);
+            document.addEventListener('touchend', stopDrag);
+        }
+
+        function drag(e) {
+            if (!isDragging) return;
+            e.preventDefault();
+
+            const point = e.touches ? e.touches[0] : e;
+            const dx = point.clientX - startX;
+            const dy = point.clientY - startY;
+
+            const newX = initialX + dx;
+            const newY = initialY + dy;
+
+            overlayWrapper.style.left = newX + 'px';
+            overlayWrapper.style.top = newY + 'px';
+            overlayWrapper.style.transform = `translate(-50%, -50%) rotate(${rotation}deg)`;
+        }
+
+        function stopDrag() {
+            isDragging = false;
+            document.removeEventListener('mousemove', drag);
+            document.removeEventListener('touchmove', drag);
+            document.removeEventListener('mouseup', stopDrag);
+            document.removeEventListener('touchend', stopDrag);
+        }
+
+        // 双指缩放和旋转
+        let initialDistance = 0;
+        let initialAngle = 0;
+        let initialScale = 1;
+        let initialRotation = 0;
+
+        overlayWrapper.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 2 && overlayLoaded) {
+                e.preventDefault();
+                initialDistance = getDistance(e.touches);
+                initialAngle = getAngle(e.touches);
+                initialScale = scale;
+                initialRotation = rotation;
+            }
+        }, { passive: false });
+
+        overlayWrapper.addEventListener('touchmove', (e) => {
+            if (e.touches.length === 2 && overlayLoaded) {
+                e.preventDefault();
+                const currentDistance = getDistance(e.touches);
+                const currentAngle = getAngle(e.touches);
+
+                const scaleFactor = currentDistance / initialDistance;
+                scale = Math.min(2, Math.max(0.2, initialScale * scaleFactor));
+                scaleSlider.value = Math.round(scale * 100);
+                scaleValue.textContent = scaleSlider.value + '%';
+
+                const angleDiff = currentAngle - initialAngle;
+                rotation = initialRotation + angleDiff;
+
+                while (rotation > 180) rotation -= 360;
+                while (rotation < -180) rotation += 360;
+
+                rotateSlider.value = Math.round(rotation);
+                rotateValue.textContent = Math.round(rotation) + '°';
+
+                updateOverlaySize();
+                updateOverlayTransform();
+
+                initialDistance = currentDistance;
+                initialAngle = currentAngle;
+            }
+        }, { passive: false });
+
+        function getDistance(touches) {
+            const dx = touches[0].clientX - touches[1].clientX;
+            const dy = touches[0].clientY - touches[1].clientY;
+            return Math.sqrt(dx * dx + dy * dy);
+        }
+
+        function getAngle(touches) {
+            const dx = touches[1].clientX - touches[0].clientX;
+            const dy = touches[1].clientY - touches[0].clientY;
+            return Math.atan2(dy, dx) * (180 / Math.PI);
+        }
+
+        // 鼠标滚轮缩放
+        overlayWrapper.addEventListener('wheel', (e) => {
+            if (!overlayLoaded) return;
+            e.preventDefault();
+
+            const delta = e.deltaY > 0 ? 0.9 : 1.1;
+            scale = Math.min(2, Math.max(0.2, scale * delta));
+            scaleSlider.value = Math.round(scale * 100);
+            scaleValue.textContent = scaleSlider.value + '%';
+
+            updateOverlaySize();
+        }, { passive: false });
+
+        // 拍照
+        captureBtn.addEventListener('click', () => {
+            if (!overlayLoaded) {
+                alert('请先上传透卡');
+                return;
+            }
+            capturePhoto();
+        });
+
+        async function capturePhoto() {
+            loadingOverlay.style.display = 'flex';
+            loadingOverlay.style.opacity = '1';
+            loadingText.textContent = '正在处理照片...';
+
+            const ctx = canvas.getContext('2d');
+            const hasVideo = video.srcObject && video.readyState >= 2;
+            const sourceImage = isAIEnabled ? outputCanvas : video;
+
+            if (hasVideo && sourceImage) {
+                let finalImageData;
+                
+                if (isAIEnabled) {
+                    // AI 模式：需要先处理视频帧
+                    const tempCanvas = document.createElement('canvas');
+                    tempCanvas.width = video.videoWidth;
+                    tempCanvas.height = video.videoHeight;
+                    const tempCtx = tempCanvas.getContext('2d');
+                    tempCtx.drawImage(video, 0, 0);
+
+                    tempCanvas.toBlob(async (blob) => {
+                        try {
+                            const resultBlob = await removeBackground(blob);
+                            const resultImage = new Image();
+                            resultImage.onload = () => {
+                                canvas.width = resultImage.width;
+                                canvas.height = resultImage.height;
+                                ctx.drawImage(resultImage, 0, 0);
+
+                                const sourceRect = outputCanvas.getBoundingClientRect();
+                                const overlayRect = overlay.getBoundingClientRect();
+
+                                const scaleX = canvas.width / sourceRect.width;
+                                const scaleY = canvas.height / sourceRect.height;
+
+                                const overlayX = (overlayRect.left - sourceRect.left) * scaleX;
+                                const overlayY = (overlayRect.top - sourceRect.top) * scaleY;
+                                const overlayWidth = overlayRect.width * scaleX;
+                                const overlayHeight = overlayRect.height * scaleY;
+
+                                ctx.drawImage(overlay, overlayX, overlayY, overlayWidth, overlayHeight);
+
+                                capturedImageData = canvas.toDataURL('image/png');
+                                previewImage.src = capturedImageData;
+                                previewModal.classList.add('active');
+                                loadingOverlay.style.opacity = '0';
+                                setTimeout(() => {
+                                    loadingOverlay.style.display = 'none';
+                                }, 500);
+                            };
+                            resultImage.src = URL.createObjectURL(resultBlob);
+                        } catch (error) {
+                            console.error('AI 处理失败:', error);
+                            alert('AI 处理失败，已使用原始照片');
+                            
+                            // 回退到使用原图
+                            canvas.width = video.videoWidth;
+                            canvas.height = video.videoHeight;
+                            ctx.drawImage(video, 0, 0);
+
+                            const sourceRect = video.getBoundingClientRect();
+                            const overlayRect = overlay.getBoundingClientRect();
+
+                            const scaleX = canvas.width / sourceRect.width;
+                            const scaleY = canvas.height / sourceRect.height;
+
+                            const overlayX = (overlayRect.left - sourceRect.left) * scaleX;
+                            const overlayY = (overlayRect.top - sourceRect.top) * scaleY;
+                            const overlayWidth = overlayRect.width * scaleX;
+                            const overlayHeight = overlayRect.height * scaleY;
+
+                            ctx.drawImage(overlay, overlayX, overlayY, overlayWidth, overlayHeight);
+
+                            capturedImageData = canvas.toDataURL('image/png');
+                            previewImage.src = capturedImageData;
+                            previewModal.classList.add('active');
+                            loadingOverlay.style.opacity = '0';
+                            setTimeout(() => {
+                                loadingOverlay.style.display = 'none';
+                            }, 500);
+                        }
+                    }, 'image/png');
+                    return;
+                } else {
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    ctx.drawImage(video, 0, 0);
+
+                    const sourceRect = video.getBoundingClientRect();
+                    const overlayRect = overlay.getBoundingClientRect();
+
+                    const scaleX = canvas.width / sourceRect.width;
+                    const scaleY = canvas.height / sourceRect.height;
+
+                    const overlayX = (overlayRect.left - sourceRect.left) * scaleX;
+                    const overlayY = (overlayRect.top - sourceRect.top) * scaleY;
+                    const overlayWidth = overlayRect.width * scaleX;
+                    const overlayHeight = overlayRect.height * scaleY;
+
+                    ctx.drawImage(overlay, overlayX, overlayY, overlayWidth, overlayHeight);
+
+                    capturedImageData = canvas.toDataURL('image/png');
+                    previewImage.src = capturedImageData;
+                    previewModal.classList.add('active');
+                    loadingOverlay.style.opacity = '0';
+                    setTimeout(() => {
+                        loadingOverlay.style.display = 'none';
+                    }, 500);
+                }
+            } else {
+                canvas.width = 1920;
+                canvas.height = 1080;
+
+                const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+                gradient.addColorStop(0, '#667eea');
+                gradient.addColorStop(1, '#764ba2');
+                ctx.fillStyle = gradient;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                const fallbackRect = document.getElementById('videoFallback').getBoundingClientRect();
+                const overlayRect = overlay.getBoundingClientRect();
+
+                const scaleX = canvas.width / fallbackRect.width;
+                const scaleY = canvas.height / fallbackRect.height;
+
+                const overlayX = (overlayRect.left - fallbackRect.left) * scaleX;
+                const overlayY = (overlayRect.top - fallbackRect.top) * scaleY;
+                const overlayWidth = overlayRect.width * scaleX;
+                const overlayHeight = overlayRect.height * scaleY;
+
+                ctx.drawImage(overlay, overlayX, overlayY, overlayWidth, overlayHeight);
+
+                capturedImageData = canvas.toDataURL('image/png');
+                previewImage.src = capturedImageData;
+                previewModal.classList.add('active');
+                loadingOverlay.style.opacity = '0';
+                setTimeout(() => {
+                    loadingOverlay.style.display = 'none';
+                }, 500);
+            }
+        }
+
+        // 保存照片
+        saveBtn.addEventListener('click', () => {
+            if (capturedImageData) {
+                const link = document.createElement('a');
+                link.download = `灵影照片_${Date.now()}.png`;
+                link.href = capturedImageData;
+                link.click();
+            }
+        });
+
+        // 重拍
+        retakeBtn.addEventListener('click', () => {
+            previewModal.classList.remove('active');
+            capturedImageData = null;
+        });
+
+        // 关闭预览
+        closePreview.addEventListener('click', () => {
+            previewModal.classList.remove('active');
+            capturedImageData = null;
+        });
+
+        // 窗口大小变化
+        window.addEventListener('resize', () => {
+            if (overlayLoaded) {
+                updateOverlaySize();
+            }
+        });
+
+        // 启动应用
+        initCamera();
+    </script>
+</body>
+</html>
