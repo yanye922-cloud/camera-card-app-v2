@@ -903,22 +903,63 @@
         let currentFacingMode = 'environment';
         let currentStream = null;
 
+        // 检测可用摄像头设备
+        async function detectCameras() {
+            try {
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const cameras = devices.filter(device => device.kind === 'videoinput');
+                console.log('检测到的摄像头数量:', cameras.length);
+                cameras.forEach((camera, index) => {
+                    console.log(`摄像头 ${index + 1}:`, {
+                        id: camera.deviceId,
+                        label: camera.label || '未命名设备',
+                        kind: camera.kind
+                    });
+                });
+                return cameras;
+            } catch (err) {
+                console.error('检测摄像头失败:', err);
+                return [];
+            }
+        }
+
         async function initCamera(facingMode = 'environment') {
             try {
                 console.log('正在请求相机权限...');
+
+                // 先检测可用摄像头
+                const cameras = await detectCameras();
+                if (cameras.length === 0) {
+                    throw new Error('未检测到任何摄像头设备');
+                }
 
                 // 停止当前流
                 if (currentStream) {
                     currentStream.getTracks().forEach(track => track.stop());
                 }
 
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    video: {
-                        facingMode: facingMode,
-                        width: { ideal: 1920 },
-                        height: { ideal: 1080 }
-                    }
-                });
+                // 尝试获取相机流
+                let stream;
+                try {
+                    stream = await navigator.mediaDevices.getUserMedia({
+                        video: {
+                            facingMode: facingMode,
+                            width: { ideal: 1920 },
+                            height: { ideal: 1080 }
+                        }
+                    });
+                } catch (err) {
+                    console.warn('高清模式失败，尝试标准模式:', err);
+                    // 降级到标准分辨率
+                    stream = await navigator.mediaDevices.getUserMedia({
+                        video: {
+                            facingMode: facingMode,
+                            width: { ideal: 1280 },
+                            height: { ideal: 720 }
+                        }
+                    });
+                }
+
                 console.log('相机流获取成功');
                 currentStream = stream;
                 video.srcObject = stream;
@@ -947,7 +988,28 @@
                 loading.classList.add('hidden');
 
             } catch (err) {
-                console.error('Camera error:', err);
+                console.error('Camera error:', err.name, err.message);
+
+                let errorMsg = '';
+                switch(err.name) {
+                    case 'NotAllowedError':
+                        errorMsg = '相机权限被拒绝，请在浏览器设置中允许访问相机';
+                        break;
+                    case 'NotReadableError':
+                        errorMsg = '相机无法启动，可能被其他应用占用或硬件故障。\n\n请尝试：\n1. 关闭所有可能使用摄像头的应用\n2. 重启浏览器\n3. 检查 Windows 设置 → 隐私 → 相机\n4. 确认摄像头未被物理禁用';
+                        break;
+                    case 'NotFoundError':
+                        errorMsg = '未检测到相机设备';
+                        break;
+                    case 'OverconstrainedError':
+                        errorMsg = '相机不支持请求的分辨率';
+                        break;
+                    default:
+                        errorMsg = `相机初始化失败: ${err.message}`;
+                }
+
+                console.error('详细错误:', errorMsg);
+                alert(errorMsg);
                 loading.classList.add('hidden');
                 document.getElementById('videoFallback').classList.add('active');
             }
